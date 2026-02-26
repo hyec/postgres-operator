@@ -106,7 +106,7 @@ function aws_delete_outdated {
     echo "deleting $count outdated backups created before $cutoff_date"
 
     # deleted outdated files in batches with 100 at a time
-    tr '\n' '\0'  < /tmp/outdated-backups | xargs -0 -P1 -n100 bash -c 'aws_delete_objects "$@"' _
+    tr '\n' '\0'  < /tmp/outdated-backups | xargs --verbose -0 -P1 -n100 bash -c 'aws_delete_objects "$@"' _
 }
 
 function aws_upload {
