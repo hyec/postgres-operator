@@ -1,6 +1,7 @@
-ARG BASE_IMAGE=ubuntu:22.04
+ARG BASE_IMAGE=ubuntu:24.04
 FROM ${BASE_IMAGE}
 LABEL maintainer="Team ACID @ Zalando <team-acid@zalando.de>"
+ARG TARGETARCH
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update     \
@@ -16,6 +17,7 @@ RUN apt-get update     \
         gnupg \
         gcc \
         libffi-dev \
+        libarchive-tools \
     && curl -sL https://aka.ms/InstallAzureCLIDeb | bash \
     && pip3 install --upgrade pip \
     && pip3 install --no-cache-dir awscli --upgrade \
@@ -31,10 +33,13 @@ RUN apt-get update     \
         postgresql-client-15  \
         postgresql-client-14  \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --silent https://gosspublic.alicdn.com/ossutil/v2/2.3.0/ossutil-2.3.0-linux-$TARGETARCH.zip \
+        | bsdtar -x -f - --strip-components 1 -C /usr/local/bin '*/ossutil' \
+    && chmod +x /usr/local/bin/ossutil
 
 COPY dump.sh ./
 
 ENV PG_DIR=/usr/lib/postgresql
 
-ENTRYPOINT ["/dump.sh"]
+CMD ["/dump.sh"]

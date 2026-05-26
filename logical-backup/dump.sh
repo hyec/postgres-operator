@@ -1,5 +1,7 @@
 #! /usr/bin/env bash
 
+set -ex
+
 # enable unofficial bash strict mode
 set -o errexit
 set -o nounset
@@ -139,6 +141,40 @@ function gcs_upload {
     gsutil ${GSUTIL_OPTIONS[@]} cp - "$PATH_TO_BACKUP"
 }
 
+function oss_path_prefix {
+    echo oss://$LOGICAL_BACKUP_S3_BUCKET"/"$LOGICAL_BACKUP_S3_BUCKET_PREFIX"/"$SCOPE$LOGICAL_BACKUP_S3_BUCKET_SCOPE_SUFFIX"/logical_backups/"
+}
+
+function oss_auth_args {
+    local -n args=$1
+    args=()
+
+    [[ ! -z "$LOGICAL_BACKUP_S3_ENDPOINT" ]] && args+=("--endpoint=$LOGICAL_BACKUP_S3_ENDPOINT")
+    [[ ! -z "$LOGICAL_BACKUP_S3_REGION" ]] && args+=("--region=$LOGICAL_BACKUP_S3_REGION")
+    [[ ! -z "$AWS_ACCESS_KEY_ID" ]] && args+=("--access-key-id=$AWS_ACCESS_KEY_ID")
+    [[ ! -z "$AWS_SECRET_ACCESS_KEY" ]] && args+=("--access-key-secret=$AWS_SECRET_ACCESS_KEY")
+}
+
+function oss_delete_outdated {
+    if [[ -z "$LOGICAL_BACKUP_S3_RETENTION_TIME" ]] ; then
+        echo "no retention time configured: skip cleanup of outdated backups"
+        return 0
+    fi
+
+    # define cutoff date for outdated backups (day precision)
+    cutoff_date=$(date -u -d "$LOGICAL_BACKUP_S3_RETENTION_TIME ago" +"%Y-%m-%dT%H:%M:%S")
+
+    oss_auth_args auth_args
+    echo ossutil "${auth_args[@]}" --recursive --dry-run rm "$(oss_path_prefix)" --max-mtime "$cutoff_date"
+}
+
+function oss_upload {
+    PATH_TO_BACKUP="$(oss_path_prefix)$(date +%s).sql.gz"
+
+    oss_auth_args auth_args
+    ossutil "${auth_args[@]}" cp - "$PATH_TO_BACKUP"
+}
+
 function upload {
     case $LOGICAL_BACKUP_PROVIDER in
         "gcs")
@@ -148,6 +184,9 @@ function upload {
             aws_upload $(($(estimate_size) / DUMP_SIZE_COEFF))
             aws_delete_outdated
             ;;
+        "oss")
+            oss_upload
+            oss_delete_outdated
     esac
 }
 
